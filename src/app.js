@@ -3,7 +3,7 @@ require('dotenv').config();
 import { Client, GatewayIntentBits, Partials, Collection } from "discord.js";
 import { loadEvents } from "./helpers";
 import path from "path";
-import { get } from "http";
+
 
 const TOKEN = process.env.TOKEN;
 
@@ -17,16 +17,10 @@ const client = new Client({
 });
 
 
-//this should be removed and replaced with a way to capture the word
 async function getWordleWord() {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, '0');
-  const day = String(today.getDate()).padStart(2, '0');
-  const dateStr = `${year}-${month}-${day}`;
 
-  //connects to the NYtimes wordle api
-  const url = `https://www.nytimes.com/svc/wordle/v2/${dateStr}.json`;
+  //connects to the repo JSON list I made
+  const url = `https://raw.githubusercontent.com/Mario-gogo/list/refs/heads/main/list.json`;
 
   try {
     //built in fetch, hopefully will return desired json
@@ -36,11 +30,16 @@ async function getWordleWord() {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     //retrieve the json data, since this is inside an async function, we need to put AWAIT since WE NEED THIS
-    //BEFORE WE CONTINUE
+    //BEFORE WE CONTINUE, data will receive the json object with the variables/information
     const data = await response.json();
+    //just the tech_word field, its an array so wordlist is an array
+    const wordlist = data.tech_words;
     
-    // according to google, the "solution" field is what we really need
-    const wordleWord = data.solution;
+    
+     const randomIndex = Math.floor(Math.random() * wordlist.length);
+     //pick a random index from the wordlist above
+    const wordleWord = wordlist[randomIndex];
+    
     
     //return the word to the calling function (when game is activated)
     return wordleWord;
@@ -50,13 +49,11 @@ async function getWordleWord() {
   }
 }
 
-//getWordleWord();
-
 //map with key and value (word, num of guesses). Guesses will be the restriction to win/lose.
  const activeGames = new Map();
 
 client.on('messageCreate', async (message) => {
-    // 
+    // if a bot responds ignore it
     if (message.author.bot) return;
 
     // 
@@ -70,13 +67,15 @@ client.on('messageCreate', async (message) => {
 
     
   
-    if (command === '!wordle') {
+    if (command === '!techdle') {
       //This needs to be "await" or else the function will just go on while the getwordleword function is catching up
     const secretWord = await getWordleWord();
+
+    console.log("This is a test: " + secretWord);
     //links the user with the values of "secretword" and guesses
     activeGames.set(message.author.id, { word: secretWord, guesses: 0 });
     
-    return message.reply('New Wordle game started! Type `!guess` to play.');
+    return message.reply('New Wordle game with TECH words started! Type `!guess ` then a word seperated with a space to play.');
   }
 
   // Make a guess, data will be stored in this instance of game. 
@@ -99,7 +98,7 @@ client.on('messageCreate', async (message) => {
     //store the game data here from the "game" variable which contains the map data from "active games"
     const {word, guesses} = game;
 
-    console.log("This is a test!!" + word);
+    console.log("Secret Word is: " + word);
     if (guess === word) {
       //delete the game instance to start over again
       activeGames.delete(message.author.id);
