@@ -1,4 +1,5 @@
 // Word lists: the answer pool and every word accepted as a guess.
+import { OFFICIAL_GUESSES } from "./officialGuesses";
 
 export const WORD_LENGTH = 5;
 
@@ -35,8 +36,10 @@ const EXTRA_GUESSES = `
 abuse adept aloft amber ample anvil bacon basil beard berry bible bingo bison blush bluff boast bonus booth brave brush bunch cargo carve cedar chaos cheer chess chill chunk cider cliff cobra comet coral crane crisp crown cubic dairy delta dense diner ditch dizzy donor dozen draft eagle elbow ember fancy feast fiber flair flock flood flute forge forum frost gauge gloom glory grill gypsy habit haste hazel hedge hinge hobby ivory jolly kayak koala lemon lilac lodge lunar mango maple marsh medal mirth nerdy nylon oasis opera orbit otter oxide pearl pixel plaza plumb polar prank prism quest quilt rebel relax ridge rival rocky rumor salad sauce scout shrug siren skate sleek slope snack solar spark spoon squad stack stern surge swift swing sword tango tempo thumb tulip ultra vapor vigor waltz whale wield yacht yield zebra
 `.trim().split(/\s+/);
 
-// Every word the bot accepts as a guess.
+// Every word the bot accepts as a guess: anything real Wordle accepts, plus
+// our tech answers (some, like regex and mutex, aren't in Wordle's list).
 export const ALLOWED_GUESSES = new Set([
+  ...OFFICIAL_GUESSES,
   ...ANSWERS,
   ...GENERAL_WORDS,
   ...EXTRA_GUESSES,
