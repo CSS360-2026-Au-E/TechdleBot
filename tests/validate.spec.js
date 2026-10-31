@@ -21,8 +21,19 @@ describe("validateGuess", () => {
     }
   });
 
-  it("accepts five letters even when absent from the word list", () => {
-    expect(validateGuess("zzzzz")).to.deep.equal({ valid: true, guess: "zzzzz" });
+  it("rejects 5-letter strings that aren't words", () => {
+    expect(validateGuess("zzzzz")).to.deep.equal({ valid: false, error: ERRORS.NOT_A_WORD });
+  });
+
+  it("accepts everyday words, not just tech words", () => {
+    for (const w of ["crane", "jazzy", "frame", "regex"]) {
+      expect(validateGuess(w)).to.deep.equal({ valid: true, guess: w });
+    }
+  });
+
+  it("uses a custom word list when given one", () => {
+    expect(validateGuess("zzzzz", new Set(["zzzzz"])).valid).to.equal(true);
+    expect(validateGuess("house", new Set(["zzzzz"])).valid).to.equal(false);
   });
 
   it("rejects non-string input", () => {

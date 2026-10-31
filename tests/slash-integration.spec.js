@@ -86,13 +86,12 @@ describe("Techdle slash integration", () => {
     expect(reply).to.equal("⬛🟩🟨⬛⬛ (Guess 1/6)\n5 attempts left. Use /guess to guess again.");
     expect(reply.toLowerCase()).not.to.include("array");
   });
-  it("scores unlisted guesses, saves them and counts their attempts", async () => {
+  it("rejects made-up words without using an attempt", async () => {
     client.techdleGames = createGameStore(filename);
     startGame("alice", client.techdleGames, () => 0); // array
-    expect(await send("guess", "zzzzz")).to.equal("⬛⬛⬛⬛⬛ (Guess 1/6)\n5 attempts left. Use /guess to guess again.");
-    expect(await send("guess", "razzz")).to.equal("🟨🟨⬛⬛⬛ (Guess 2/6)\n4 attempts left. Use /guess to guess again.");
-    expect(await send("guess", "aaaaa")).to.equal("🟩⬛⬛🟩⬛ (Guess 3/6)\n3 attempts left. Use /guess to guess again.");
-    expect(createGameStore(filename).get("alice").guesses.map(g => g.guess)).to.deep.equal(["zzzzz", "razzz", "aaaaa"]);
+    expect(await send("guess", "zzzzz")).to.equal("That isn't in the word list.");
+    expect(await send("guess", "radar")).to.equal("🟨🟨⬛🟩🟨 (Guess 1/6)\n5 attempts left. Use /guess to guess again.");
+    expect(createGameStore(filename).get("alice").guesses.map(g => g.guess)).to.deep.equal(["radar"]);
   });
   it("loses after six valid wrong guesses and rejects a seventh", async () => {
     const game = await start();
