@@ -21,18 +21,19 @@ describe("validateGuess", () => {
     }
   });
 
-  it("rejects 5-letter strings that aren't words", () => {
-    expect(validateGuess("zzzzz")).to.deep.equal({ valid: false, error: ERRORS.NOT_A_WORD });
+  it("accepts five letters even when absent from the word list", () => {
+    expect(validateGuess("zzzzz")).to.deep.equal({ valid: true, guess: "zzzzz" });
   });
 
-  it("rejects empty and non-string input", () => {
-    for (const bad of ["", "   ", null, undefined, 12345, {}]) {
+  it("rejects non-string input", () => {
+    for (const bad of [null, undefined, 12345, {}]) {
       expect(validateGuess(bad)).to.deep.equal({ valid: false, error: ERRORS.NOT_TEXT });
     }
   });
 
-  it("uses a custom word list when given one", () => {
-    expect(validateGuess("zzzzz", new Set(["zzzzz"])).valid).to.equal(true);
-    expect(validateGuess("house", new Set(["zzzzz"])).valid).to.equal(false);
+  it("returns the requested message for empty, short and long guesses", () => {
+    for (const raw of ["", "   ", "abcd", "abcdef"]) {
+      expect(validateGuess(raw)).to.deep.equal({ valid: false, error: "you need 5 letters" });
+    }
   });
 });

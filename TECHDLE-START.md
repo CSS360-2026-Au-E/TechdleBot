@@ -1,37 +1,62 @@
-# Techdle start game (issue #7)
+# Techdle commands
 
-Every /techdle invocation creates a fresh game with six attempts and a random
-answer from the programming-themed ANSWERS list. It replaces the user's active
-game, including an unfinished one. The immediately previous answer is excluded
-so the next game has a different word. Older words can repeat later.
+`/techdle` starts a fresh game with a random five-letter tech answer and six
+attempts. It replaces the player's previous game and excludes the immediately
+previous answer. Older answers may repeat. Both slash commands reply privately.
 
-Run npm ci, add TOKEN, CLIENT_ID (application ID) and GUILD_ID (test server ID)
-to .env, then run npm run register:techdle and npm start. Only the named guild
-command is updated; other commands are not deleted. The existing event loader
-loads interactionCreate automatically. Coordinate this handler with issue #5
-so only one dispatcher responds to /techdle. Guess submission is not included.
+`/guess word:array` submits a guess to that same game. Valid guesses produce
+green/yellow/black feedback. Invalid guesses do not consume an attempt. A match
+wins; six valid wrong guesses lose. Finished games reject further guesses until
+the player uses `/techdle` again.
 
-Games are stored under the Discord user ID, across servers. Guess integration
-must load client.techdleGames.get(interaction.user.id), call submitGuess, and
-save successful results with client.techdleGames.set(interaction.user.id, result.game).
-Do not use the previous user:UTC-day key. Old daily records are not resumed.
-Stats (#12) must record results before a new start replaces a completed game;
-this active-game store is not a statistics history.
+## Run in a test server
 
-The default file is data/techdle-games.json (ignored by git); TECHDLE_GAME_STORE
-can override it. Deploy a single bot process with persistent storage mounted.
-An ephemeral filesystem loses games on replacement. This file store does not
-support multiple processes sharing the file. Stored answers stay out of replies.
+1. Run `npm ci`.
+2. Set `TOKEN`, `CLIENT_ID` (application ID), and `GUILD_ID` (server ID) in `.env`.
+   The token and application ID must belong to the same bot.
+3. Run `npm run register:techdle`. This registers BOTH `/techdle` and `/guess`
+   for that application and server. It updates these names using individual
+   POST requests; unrelated commands are preserved.
+4. Run `npm start` and leave the process running.
+5. Select that bot's `/techdle` in Discord, then `/guess` with its required
+   `word` option. Registration alone does not run the bot.
 
-This change reuses ANSWERS from #16 and newGame from #21. It does not change
-the shared daily-word helper or guess validation. Ordinary words remain valid
-guesses. Issue #6 and #16's daily-word description conflict with the new game
-rule and need team updates. Issue #1 has a comment about another rules
-implementation in a teammate's personal repo; coordinate that integration.
+Only run one process for this bot and game store. The existing application
+also requests Server Members and Message Content intents; its Developer Portal
+settings must permit them. Its separate welcome event needs `CHANNEL_NAME` and
+a valid `MEME_URL`, with permission to send messages in that channel.
 
-PR #21 merged into #16's branch before #22 merged into #21's branch. The team
-must propagate the later start-game changes through the remaining integration;
-merging #16 alone does not necessarily include them. Main currently lacks them.
+## Shared game state
 
-Validation: npm test (43 passing); npm run build. Live Discord testing remains
-required: repeated starts, reset attempts, private replies, restart persistence.
+The slash interaction dispatcher lives in `src/events/interactionCreate.js`.
+It reuses `startGame`, `submitGuess`, and `formatFeedback`; it does not implement
+a second scoring engine. Do not add another listener responding to these same
+commands.
+
+Games are keyed by Discord user ID in `client.techdleGames`, across servers.
+The guess handler initializes the store when necessary, including after a bot
+restart, loads the player's game, submits the guess, and saves successful
+results with `set(userId, result.game)` before replying.
+
+The default file is `data/techdle-games.json` (ignored by Git).
+`TECHDLE_GAME_STORE` overrides that path. Retain this writable file on persistent
+storage to keep games across deployments. The store does not support multiple
+processes sharing the file. Old `user:UTC-day` records are not resumed. The
+active-game store is not a statistics history.
+
+## Scope and verification
+
+Run `npm test` and `npm run build`. The fallback adds 20 tests to the existing
+36, covering slash dispatch, persistence, validation, feedback, win/loss,
+player separation, overlapping guesses in one process, errors and registration.
+Discord interactions and REST calls are mocked in automated tests.
+
+This integration does not replace the legacy `!wordle`/`!guess` implementation
+in `app.js`; that implementation uses separate state. Use slash commands for
+Techdle. The existing Docker configuration also needs its `dotenv` production
+dependency corrected before Docker deployment; this command integration does
+not fix that separate issue.
+
+Before release, test on the intended Discord bot: start, guess, invalid input,
+win, six-attempt loss, new game, two players, and restart persistence. The
+fallback has not yet been tested against a live Discord connection.

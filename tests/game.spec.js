@@ -67,7 +67,6 @@ describe("game", () => {
   it("doesn't charge an attempt for an invalid guess", () => {
     const game = newGame("array");
     expect(submitGuess(game, "zz")).to.deep.equal({ ok: false, error: ERRORS.WRONG_LENGTH });
-    expect(submitGuess(game, "zzzzz")).to.deep.equal({ ok: false, error: ERRORS.NOT_A_WORD });
     expect(attemptsLeft(game)).to.equal(MAX_ATTEMPTS);
   });
 

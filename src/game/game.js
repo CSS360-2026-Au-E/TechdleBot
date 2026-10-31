@@ -35,12 +35,12 @@ export function getStatus(game) {
 // Plays one raw guess. Returns { ok: true, game, feedback } on success or
 // { ok: false, error } for an invalid guess or a finished game. Invalid
 // guesses don't cost an attempt.
-export function submitGuess(game, raw, allowed) {
+export function submitGuess(game, raw) {
   if (game.status !== STATUS.PLAYING) {
     return { ok: false, error: GAME_ERRORS.GAME_OVER };
   }
 
-  const checked = validateGuess(raw, allowed);
+  const checked = validateGuess(raw);
   if (!checked.valid) return { ok: false, error: checked.error };
 
   const feedback = scoreGuess(checked.guess, game.answer);

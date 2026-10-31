@@ -17,36 +17,26 @@ const client = new Client({
 });
 
 
-//this should be removed and replaced with a way to capture the word
 async function getWordleWord() {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, '0');
-  const day = String(today.getDate()).padStart(2, '0');
-  const dateStr = `${year}-${month}-${day}`;
-
-  //connects to the NYtimes wordle api
-  const url = `https://www.nytimes.com/svc/wordle/v2/${dateStr}.json`;
+  const url = "https://raw.githubusercontent.com/Kinkelin/WordleCompetition/refs/heads/main/data/official/combined_wordlist.txt";
 
   try {
-    //built in fetch, hopefully will return desired json
-    const response = await fetch(url);
-    //if the fetch doesn't actually connects
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+    const res = await fetch(url);
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
     }
-    //retrieve the json data, since this is inside an async function, we need to put AWAIT since WE NEED THIS
-    //BEFORE WE CONTINUE
-    const data = await response.json();
-    
-    // according to google, the "solution" field is what we really need
-    const wordleWord = data.solution;
-    
-    //return the word to the calling function (when game is activated)
-    return wordleWord;
-    //fix, be more specific with errors.
+
+    const text = await res.text();
+    const words = text
+      .split(/\r?\n/)
+      .map(word => word.trim())
+      .filter(word => word);
+
+    return words[Math.floor(Math.random() * words.length)];
   } catch (error) {
     console.error("Something went wrong:", error);
+    return null;
   }
 }
 

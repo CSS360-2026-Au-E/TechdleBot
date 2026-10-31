@@ -1,23 +1,23 @@
-import { REST, Routes, SlashCommandBuilder } from "discord.js";
+import { REST, Routes } from "discord.js";
+import { techdleCommands } from "./commands/techdle";
 
 // Run explicitly for your private test server. POST creates/updates only this
-// named command and preserves any other commands registered by teammates.
-async function register() {
-  const { TOKEN, CLIENT_ID, GUILD_ID } = process.env;
+// named commands and preserves other commands registered by teammates.
+export async function register(env = process.env, makeRest = token => new REST({ version: "10" }).setToken(token)) {
+  const { TOKEN, CLIENT_ID, GUILD_ID } = env;
   if (!TOKEN || !CLIENT_ID || !GUILD_ID) {
     throw new Error("Set TOKEN, CLIENT_ID and GUILD_ID in your .env file first.");
   }
-  const command = new SlashCommandBuilder()
-    .setName("techdle")
-    .setDescription("Start a new Techdle game with a random tech word");
-  const rest = new REST({ version: "10" }).setToken(TOKEN);
-  await rest.post(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), {
-    body: command.toJSON(),
-  });
-  console.log("Registered /techdle in your test server.");
+  const rest = makeRest(TOKEN);
+  for (const command of techdleCommands()) {
+    await rest.post(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), {
+      body: command,
+    });
+  }
+  console.log("Registered /techdle and /guess in your test server.");
 }
 
-register().catch(error => {
-  console.error("Could not register /techdle:", error.message);
+if (require.main === module) register().catch(error => {
+  console.error("Could not register Techdle commands:", error.message);
   process.exitCode = 1;
 });
