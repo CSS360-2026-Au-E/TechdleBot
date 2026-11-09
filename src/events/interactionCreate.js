@@ -3,6 +3,33 @@ import { startGame } from "../game/start";
 import { createGameStore } from "../game/store";
 import { submitGuess, attemptsLeft, STATUS } from "../game/game";
 import { formatFeedback } from "../game/feedback";
+import { recordResult, isAbandoned, formatStreak } from "../game/streak";
+
+const COMMANDS = ["techdle", "guess", "streak"];
+
+function gameStorePath() {
+  return process.env.TECHDLE_GAME_STORE ||
+    path.join(process.cwd(), "data", "techdle-games.json");
+}
+
+// Streaks live in their own file next to the saved games.
+function streakStorePath() {
+  return process.env.TECHDLE_STREAK_STORE ||
+    path.join(path.dirname(gameStorePath()), "techdle-streaks.json");
+}
+
+// Saves a streak change. A failed streak save is logged but never hides the
+// game result, which has already been saved.
+function saveStreak(client, key, update) {
+  try {
+    const streak = update(client.techdleStreaks.get(key));
+    client.techdleStreaks.set(key, streak);
+    return streak;
+  } catch (error) {
+    console.error("Techdle streak save failed:", error.message);
+    return null;
+  }
+}
 
 export async function handleStart(interaction, client) {
   if (!interaction.isChatInputCommand() || interaction.commandName !== "techdle") return;
@@ -12,7 +39,7 @@ export async function handleStart(interaction, client) {
 export async function handleInteraction(interaction, client) {
   if (
     !interaction.isChatInputCommand() ||
-    !["techdle", "guess"].includes(interaction.commandName)
+    !COMMANDS.includes(interaction.commandName)
   ) {
     return;
   }
@@ -20,22 +47,32 @@ export async function handleInteraction(interaction, client) {
   try {
     await interaction.deferReply({ ephemeral: true });
 
-    // Load saved games only when first needed.
+    // Load saved games and streaks only when first needed.
     if (!client.techdleGames) {
-      client.techdleGames = createGameStore(
-        process.env.TECHDLE_GAME_STORE ||
-          path.join(process.cwd(), "data", "techdle-games.json")
-      );
+      client.techdleGames = createGameStore(gameStorePath());
+    }
+    if (!client.techdleStreaks) {
+      client.techdleStreaks = createGameStore(streakStorePath());
     }
 
     const key = interaction.user.id;
+    if (interaction.commandName === "streak") {
+      await interaction.editReply({ content: formatStreak(client.techdleStreaks.get(key)) });
+      return;
+    }
+
     if (interaction.commandName === "techdle") {
+      const abandoned = isAbandoned(client.techdleGames.get(key));
       startGame(key, client.techdleGames);
-      await interaction.editReply({ content:
+      let content =
         "Techdle started! Guess the five-letter tech word in 6 attempts. " +
         "Every /techdle starts a new game and replaces your previous game.\n" +
-        "Use /guess and enter your word to play."
-      });
+        "Use /guess and enter your word to play.";
+      if (abandoned && client.techdleStreaks.get(key)?.current > 0) {
+        const streak = saveStreak(client, key, s => recordResult(s, STATUS.LOST));
+        if (streak) content += `\nYour last game wasn't finished, so your win streak reset to 0 (best ${streak.best}).`;
+      }
+      await interaction.editReply({ content });
       return;
     }
 
@@ -53,6 +90,12 @@ export async function handleInteraction(interaction, client) {
     }
     client.techdleGames.set(key, result.game);
 
+    // A finished game can't take more guesses, so each game is counted once.
+    const finished = result.game.status !== STATUS.PLAYING;
+    const streak = finished
+      ? saveStreak(client, key, s => recordResult(s, result.game.status))
+      : null;
+
     const row = formatFeedback(result.feedback);
     const count = result.game.guesses.length;
     let content;
@@ -63,6 +106,7 @@ export async function handleInteraction(interaction, client) {
     } else {
       content = `${row} (Guess ${count}/${result.game.maxAttempts})\n${attemptsLeft(result.game)} attempts left. Use /guess to guess again.`;
     }
+    if (streak) content += `\n${formatStreak(streak)}`;
     await interaction.editReply({ content });
   } catch (error) {
     console.error(`Techdle /${interaction.commandName} failed:`, error.message);

@@ -12,5 +12,8 @@ export function techdleCommands() {
         .setName("word")
         .setDescription("Your five-letter guess")
         .setRequired(true)),
+    new SlashCommandBuilder()
+      .setName("streak")
+      .setDescription("Show your current and best Techdle win streak"),
   ].map(command => command.toJSON());
 }
