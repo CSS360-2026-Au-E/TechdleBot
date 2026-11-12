@@ -35,10 +35,4 @@ jobs:
     - run: npm test
     - name: Run specific tests
       run: |
-          npm test -- \
-            /tests/feedback.spec.js \
-            /test/game.spec.js \
-            /test/slash-integration.spec.js \
-            /test/start.spec.js \
-            /test/validate.spec.js \
-            /test/words.spec.js
+          npm test -- 
