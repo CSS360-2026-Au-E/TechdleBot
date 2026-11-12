@@ -59,7 +59,7 @@ Overall, the bot in its current state has few vulnerabilities in its short term,
 ## CI/CD Pipeline
 Build integration has been automated through the use of GitHub actions and the CI Node.js template. Slight modifications were used to make the YAML file use Node version 24.x, as previous versions resulted in deprecation warnings. Testing was also automated, and the template allows future, more specific tests to be added. 
 ## Reflection
-Thanks to existing documentation and templates, the CI/CD pipeline wasn't that hard to implement. The threat model was disproportionally harder in comparison; the total time spent concluded to around 7-8 hours, with a roughly even split between research, creating the data flow diagram, and writing the actual analysis. In all, I would highly recommend leaving threat modeling to someone with an established background in cybersecurity, instead of someone who may have to do all the knowledge acquisition from the ground up, on the spot. 
+Thanks to existing documentation and templates, the CI/CD pipeline wasn't that hard to implement. The threat model was disproportionally harder in comparison; the total time spent concluded to around 7-8 hours, with a roughly even split between research, creating the data flow diagram, and writing the actual analysis. In all, I would highly recommend leaving threat modeling to someone with an established background in cybersecurity, or at least split the work between multiple non-experts. 
 # Anthony
 # Mario 
 # Sida
