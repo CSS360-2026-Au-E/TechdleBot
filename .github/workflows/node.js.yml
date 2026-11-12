@@ -9,6 +9,10 @@ on:
   pull_request:
     branches: [ "main" ]
 
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
   build:
 
@@ -29,3 +33,12 @@ jobs:
     - run: npm ci
     - run: npm run build --if-present
     - run: npm test
+    - name: Run specific tests
+      run: |
+          npm test -- \
+            /tests/feedback.spec.js \
+            /test/game.spec.js \
+            /test/slash-integration.spec.js \
+            /test/start.spec.js \
+            /test/validate.spec.js \
+            /test/words.spec.js
