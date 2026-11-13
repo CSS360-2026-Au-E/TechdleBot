@@ -62,5 +62,25 @@ Build integration has been automated through the use of GitHub actions and the C
 Thanks to existing documentation and templates, the CI/CD pipeline wasn't that hard to implement. The threat model was disproportionally harder in comparison; the total time spent concluded to around 7-8 hours, with a roughly even split between research, creating the data flow diagram, and writing the actual analysis. In all, I would highly recommend leaving threat modeling to someone with an established background in cybersecurity, or at least split the work between multiple non-experts. 
 # Anthony
 # Mario 
+## Unit Testing
+### Introduction
+The following are very basic, fundamental unit tests to test the restrictions on user input in order to provide a valid input via the ```!wordle``` command. These are very basic unit tests, as per instruction. More unit tests will come in the near future.
+
+| | Description | Output | Success |
+| ------------- | ------------- | ------------- | ------------- |
+| Unit Test 1: Duplicate guesses | Uses a function to imitate a user input then sends the input into the input validation .js file. Input should return a message indicating "You already guessed that!". These values are stored in a set which do not offer multiple duplicates. | Inputting the word "crane" into the function multiple times responds with the bot telling the user this value already exists. | True |
+| Unit Test 2: Invalid input | Using the same "mockMessage" function as in Unit Test 1, the mockMessage contains the ```!guess``` command provides a value less than the desired 5 letters. | Bot responds with a message requesting a valid 5-letter input. A valid input size does NOT return the failure message. | True |
+| Unit Test 3: Basic Color Boxes | Sending a word as the wordle word and a guess, both containing words that only differ in 1 letter, returns a feedback string with boxes ("emojis") which corresponds whether the letter is in the right place, exists in the answered word or is not present whatsoever. | Importing the "evaluateGuess" function file used in the previous 2 tests, we use this function to compare the feedback string with what we expect the string to be. | True |
+
+## Fuzzing
+As defined, "Fuzzing" introduces the random element of the things that could go wrong from random input that may not have been considered while in implementation. When testing, issues which arose in my instances include: 
+- Blank Input: ```!guess``` with absolutely no input breaks the game, not responding to any input and raising an exception on the back end console.
+- Duplicates: If a user inputs a duplicate guess, it would count against the user, resulting in the loss of a turn.
+Duplication had been patched then tested via Unit Test 1. Blank Input has been noted and a fix is waiting to be pushed to the upstream. 
+
+## Summary and Reflection
+The largest issue that I had, which took 3-4 hours of research just on investigating the exception, came from improper file structure. Containing all the logic within the main "app.js" file returned an error with triggering the Node Package Manager (npm) test function. The test call would attempt to run and execute the boiler plate imports at the top of app.js. In order to avoid this route, the function which implements the logic was moved to a separate file within the "game" folder. The next hurdle was the syntax behind the unit testing and the code associated with the implementation which took another 1-2 hours. In response to these issues, modularization will be taken into account in order to implement more unit test files while avoiding any accidental executions. Fuzzing was more manageable, thinking "How can I break this?" but with the randomize element, more focus on fuzzing may need to be taken into account.
+
+
 # Sida
 # Abhi
