@@ -77,6 +77,7 @@ As defined, "Fuzzing" introduces the random element of the things that could go 
 - Blank Input: ```!guess``` with absolutely no input breaks the game, not responding to any input and raising an exception on the back end console.
 - Duplicates: If a user inputs a duplicate guess, it would count against the user, resulting in the loss of a turn.
 - Injection: An attempt to insert Javascript/HTML code and 'return' keyword was made to see if the logic would process it as a command but yielded no results.
+
 Duplication had been patched then tested via Unit Test 1. Blank Input has been noted and a fix is waiting to be pushed to the upstream. 
 
 ## Summary and Reflection
