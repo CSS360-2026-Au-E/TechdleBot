@@ -61,6 +61,49 @@ Build integration has been automated through the use of GitHub actions and the C
 ## Reflection
 Thanks to existing documentation and templates, the CI/CD pipeline wasn't that hard to implement. The threat model was disproportionally harder in comparison; the total time spent concluded to around 7-8 hours, with a roughly even split between research, creating the data flow diagram, and writing the actual analysis. In all, I would highly recommend leaving threat modeling to someone with an established background in cybersecurity, or at least split the work between multiple non-experts. 
 # Anthony
+## Cyclomatic Complexity
+### Method
+Cyclomatic complexity counts the number of independent paths through a function: every `if`, `else if`, loop, `&&` and `||` adds one. I measured every function in `src/` using ESLint's built-in `complexity` rule with the limit set to 0, so it reports a score for all 44 functions. A common rule of thumb is that 1–10 is simple, 11–20 is moderate and getting harder to test, and over 20 is complex and a good candidate for splitting up.
+
+### Results
+Every function scoring 5 or higher on the current team branch (AythanTesting):
+
+| Function | File | Complexity | Rating |
+| ------------- | ------------- | ------------- | ------------- |
+| `handleInteraction` | `src/events/interactionCreate.js` | 15 | Moderate |
+| `messageCreate` handler (old `!wordle` / `!guess` game) | `src/app.js` | 14 | Moderate |
+| `scoreGuess` | `src/game/feedback.js` | 7 | Simple |
+| `register` | `src/registerTechdle.js` | 7 | Simple |
+| `createGameStore` | `src/game/store.js` | 6 | Simple |
+| `loadEvents` | `src/helpers/loadEvents.js` | 5 | Simple |
+
+The other 38 functions all scored between 1 and 4.
+
+### Findings
+- **`handleInteraction` is the riskiest function in the bot.** It handles every slash command in one function: deferring the reply, loading the saved games, starting a game, checking for an active game, validating and scoring the guess, building the win/loss/in-progress reply, and error handling. With my streak feature (PR #46) added, its score goes from 15 to **22**, past the "complex" line. Every new command makes it longer, so it should be split into one small handler per command (`/techdle`, `/guess`, `/streak`) with `handleInteraction` only choosing which one to call.
+- **The old `!wordle` game in `app.js` (complexity 14) is technical debt.** It is a second, separate copy of the game that was replaced by the slash commands. It has its own scoring loop that doesn't handle repeated letters the way `scoreGuess` does, it keeps games only in memory, and it prints the secret word to the console on every guess (`console.log("This is a test!!" + word)`). It should be removed or moved onto the same game code as the slash commands.
+- **The game logic is in good shape.** Everything in `src/game/` is simple (7 or lower), which matches how easy those files were to unit test.
+
+## Smoke Test
+### What it does
+I wrote `tests/smoke.spec.js` (in PR #46), one quick pass through every major feature of the bot. Instead of calling functions one by one, it loads the real event handlers with `loadEvents`, the same way `app.js` does, and drives them like Discord would:
+
+| Check | What it verifies |
+| ------------- | ------------- |
+| Loads every event handler | `ready`, `interactionCreate` and `guildMemberAdd` are all registered |
+| Registers all slash commands | `/techdle`, `/guess` and `/streak` are sent to Discord |
+| Ready event | The bot logs in and prints its startup banner |
+| Welcomes a new member | A new member gets a welcome message with a meme embed |
+| Full game, win | Start a game, an invalid guess is rejected, a wrong guess shows feedback, the right guess wins and starts a streak |
+| Full game, loss | Six wrong guesses end the game, reveal the word and reset the streak |
+| `/streak` | Shows the current and best streak |
+| Restart | Saved games and streaks reload after the bot restarts |
+
+All 8 checks pass, and the full test suite is at 84 passing. It runs with the rest of the tests through `npm test`, so once it's merged, the CI pipeline Aythan set up will run it on every push and pull request to main. On its own it runs with `npx mocha -r esbuild-runner/register tests/smoke.spec.js`.
+
+### Bug found
+The smoke test found a real bug on its first run: **the welcome event crashes when `MEME_URL` is not set.** The code defaults it to an empty string, and discord.js refuses an empty image URL, so `guildMemberAdd` throws and the new member never gets welcomed. My own `.env` sets `MEME_URL`, which is why I never noticed, but the README doesn't mention it, so anyone setting up the bot fresh would hit it. The fix is to skip the meme embed (and send the plain welcome) when no URL is set.
+
 # Mario 
 ## Unit Testing
 ### Introduction
