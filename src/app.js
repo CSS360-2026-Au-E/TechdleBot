@@ -31,7 +31,7 @@ async function getWordleWord() {
     const words = text
       .split(/\r?\n/)
       .map(word => word.trim())
-      .filter(word => word);
+      .filter(word => word.length === 5);
 
     return words[Math.floor(Math.random() * words.length)];
   } catch (error) {
