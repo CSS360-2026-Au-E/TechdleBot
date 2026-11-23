@@ -147,10 +147,11 @@ describe("Techdle slash integration", () => {
     expect(await send("guess", game.answer)).to.include("in 2 tries");
     expect(createGameStore(filename).get("alice").status).to.equal("won");
   });
-  it("preserves two overlapping guesses in one process", async () => {
+  it("rejects overlapping duplicate guesses in one process", async () => {
     const game = await start();
-    await Promise.all([send("guess", wrong(game)), send("guess", wrong(game))]);
-    expect(createGameStore(filename).get("alice").guesses).to.have.length(2);
+    const replies = await Promise.all([send("guess", wrong(game)), send("guess", wrong(game))]);
+    expect(replies).to.include("You already guessed that!");
+    expect(createGameStore(filename).get("alice").guesses).to.have.length(1);
   });
   it("does not claim a successful guess if saving fails", async () => {
     const game = await start();

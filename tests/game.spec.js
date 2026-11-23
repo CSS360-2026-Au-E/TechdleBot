@@ -70,6 +70,14 @@ describe("game", () => {
     expect(attemptsLeft(game)).to.equal(MAX_ATTEMPTS);
   });
 
+  it("doesn't charge an attempt for a repeated guess", () => {
+    const first = submitGuess(newGame("array"), "crane");
+    const repeated = submitGuess(first.game, " CRANE ");
+    expect(repeated).to.deep.equal({ ok: false, error: GAME_ERRORS.DUPLICATE_GUESS });
+    expect(first.game.guesses).to.have.length(1);
+    expect(attemptsLeft(first.game)).to.equal(MAX_ATTEMPTS - 1);
+  });
+
   it("never mutates the game it was given", () => {
     const game = newGame("array");
     submitGuess(game, "stack");
