@@ -55,7 +55,7 @@ describe("Techdle slash integration", () => {
     expect(await send("techdle", undefined, id)).to.include("Use /guess");
     return client.techdleGames.get(id);
   }
-  const wrong = game => ANSWERS.find(word => word !== game.answer);
+  const wrong = (game, index = 0) => ANSWERS.filter(word => word !== game.answer)[index];
 
   it("asks a player without a game to start first", async () => {
     expect(await send("guess", "array")).to.equal("Start a game with /techdle first.");
@@ -96,16 +96,16 @@ describe("Techdle slash integration", () => {
   it("loses after six valid wrong guesses and rejects a seventh", async () => {
     const game = await start();
     for (let n = 1; n < 6; n++) {
-      expect(await send("guess", wrong(game))).to.include(`${6 - n} attempts left`);
+      expect(await send("guess", wrong(game, n - 1))).to.include(`${6 - n} attempts left`);
     }
-    expect(await send("guess", wrong(game))).to.include(`No attempts left. The word was ${game.answer.toUpperCase()}.`);
+    expect(await send("guess", wrong(game, 5))).to.include(`No attempts left. The word was ${game.answer.toUpperCase()}.`);
     const before = fs.readFileSync(filename, "utf8");
     expect(await send("guess", game.answer)).to.equal("This game is already finished.");
     expect(fs.readFileSync(filename, "utf8")).to.equal(before);
   });
   it("allows a win on the sixth guess", async () => {
     const game = await start();
-    for (let n = 0; n < 5; n++) await send("guess", wrong(game));
+    for (let n = 0; n < 5; n++) await send("guess", wrong(game, n));
     expect(await send("guess", game.answer)).to.include("in 6 tries");
     expect(client.techdleGames.get("alice").status).to.equal("won");
   });
@@ -127,7 +127,7 @@ describe("Techdle slash integration", () => {
     let game = await start();
     await send("guess", game.answer);
     game = await start();
-    for (let n = 0; n < 6; n++) await send("guess", wrong(game));
+    for (let n = 0; n < 6; n++) await send("guess", wrong(game, n));
     const next = await start();
     expect(next.status).to.equal("playing");
     expect(next.answer).not.to.equal(game.answer);
@@ -147,10 +147,11 @@ describe("Techdle slash integration", () => {
     expect(await send("guess", game.answer)).to.include("in 2 tries");
     expect(createGameStore(filename).get("alice").status).to.equal("won");
   });
-  it("preserves two overlapping guesses in one process", async () => {
+  it("rejects overlapping duplicate guesses in one process", async () => {
     const game = await start();
-    await Promise.all([send("guess", wrong(game)), send("guess", wrong(game))]);
-    expect(createGameStore(filename).get("alice").guesses).to.have.length(2);
+    const replies = await Promise.all([send("guess", wrong(game)), send("guess", wrong(game))]);
+    expect(replies).to.include("You already guessed that!");
+    expect(createGameStore(filename).get("alice").guesses).to.have.length(1);
   });
   it("does not claim a successful guess if saving fails", async () => {
     const game = await start();
@@ -190,7 +191,7 @@ describe("Techdle slash integration", () => {
     await send("guess", (await start()).answer);
     const game = await start();
     let reply;
-    for (let n = 0; n < 6; n++) reply = await send("guess", wrong(game));
+    for (let n = 0; n < 6; n++) reply = await send("guess", wrong(game, n));
     expect(reply).to.include("The word was");
     expect(reply).to.include("🔥 Win streak: 0 (best 2)");
   });

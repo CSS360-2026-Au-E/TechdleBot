@@ -89,8 +89,8 @@ describe("Techdle start", () => {
       const initial = store.get("alice");
       expect(submitGuess(initial, "zz").ok).to.equal(false);
       expect(store.get("alice").guesses).to.have.length(0);
-      const wrong = ANSWERS.find(word => word !== initial.answer);
       for (let attempt = 0; attempt < 6; attempt++) {
+        const wrong = ANSWERS.filter(word => word !== initial.answer)[attempt];
         const result = submitGuess(store.get("alice"), wrong);
         expect(result.ok).to.equal(true);
         expect(result.feedback).to.have.length(5);
