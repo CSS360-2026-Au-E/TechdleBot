@@ -15,5 +15,8 @@ export function techdleCommands() {
     new SlashCommandBuilder()
       .setName("streak")
       .setDescription("Show your current and best Techdle win streak"),
+    new SlashCommandBuilder()
+      .setName("leaderboard")
+      .setDescription("Show the top Techdle players in this server by best win streak"),
   ].map(command => command.toJSON());
 }
