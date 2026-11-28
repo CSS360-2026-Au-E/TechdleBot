@@ -356,17 +356,13 @@ describe("Techdle challenge slash integration", () => {
 });
 
 describe("Techdle command registration", () => {
-  it("POSTs all six commands with a required word option and no bulk deletion", async () => {
-  it("POSTs all four commands with a required word option and no bulk deletion", async () => {
+  it("POSTs all seven commands with a required word option and no bulk deletion", async () => {
     const calls = [];
     await register({ TOKEN: "test", CLIENT_ID: "123", GUILD_ID: "456" }, token => {
       expect(token).to.equal("test");
       return { async post(route, options) { calls.push({ route, ...options }); } };
     });
-    expect(calls.map(c => c.body.name)).to.deep.equal(
-      ["techdle", "guess", "streak", "challenge", "accept", "cguess"]
-    );
-    expect(calls.map(c => c.body.name)).to.deep.equal(["techdle", "guess", "streak", "leaderboard"]);
+    expect(calls.map(c => c.body.name)).to.deep.equal(["techdle", "guess", "streak", "leaderboard", "challenge", "accept", "cguess"]);
     for (const c of calls) expect(c.route).to.equal("/applications/123/guilds/456/commands");
     expect(calls[1].body.options[0]).to.include({ name: "word", required: true, type: 3 });
     expect(calls[3].body.options[0]).to.include({ name: "player", required: true, type: 6 });

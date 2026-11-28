@@ -4,20 +4,12 @@ import { createGameStore } from "../game/store";
 import { submitGuess, attemptsLeft, STATUS } from "../game/game";
 import { formatFeedback } from "../game/feedback";
 import { recordResult, isAbandoned, formatStreak } from "../game/streak";
-import {
-  createChallenge,
-  acceptChallenge,
-  submitChallengeGuess,
-  challengeResult,
-  RESULT,
-} from "../game/challenge";
-
-const COMMANDS = ["techdle", "guess", "streak", "challenge", "accept", "cguess"];
-// The other player needs to see these, so they aren't ephemeral.
-const PUBLIC_COMMANDS = ["challenge", "accept"];
+import { createChallenge, acceptChallenge, submitChallengeGuess, challengeResult, RESULT} from "../game/challenge";
 import { streakKey, rankLeaderboard, formatLeaderboard } from "../game/leaderboard";
 
-const COMMANDS = ["techdle", "guess", "streak", "leaderboard"];
+const COMMANDS = ["techdle", "guess", "streak", "leaderboard", "challenge", "accept", "cguess"];
+// The other player needs to see these, so they aren't ephemeral.
+const PUBLIC_COMMANDS = ["challenge", "accept"];
 
 function gameStorePath() {
   return process.env.TECHDLE_GAME_STORE ||

@@ -16,6 +16,9 @@ export function techdleCommands() {
       .setName("streak")
       .setDescription("Show your current and best Techdle win streak"),
     new SlashCommandBuilder()
+      .setName("leaderboard")
+      .setDescription("Show the top Techdle players in this server by best win streak"),
+    new SlashCommandBuilder()
       .setName("challenge")
       .setDescription("Challenge another player to a head-to-head Techdle game")
       .addUserOption(option => option
@@ -32,7 +35,5 @@ export function techdleCommands() {
         .setName("word")
         .setDescription("Your five-letter guess")
         .setRequired(true)),
-      .setName("leaderboard")
-      .setDescription("Show the top Techdle players in this server by best win streak"),
   ].map(command => command.toJSON());
 }

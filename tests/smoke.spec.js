@@ -87,8 +87,7 @@ describe("Smoke test: every major feature", () => {
       await register({ TOKEN: "t", CLIENT_ID: "1", GUILD_ID: "2" },
         () => ({ async post(route, { body }) { posted.push(body.name); } }));
     } finally { console.log = original; }
-    expect(posted).to.deep.equal(["techdle", "guess", "streak", "challenge", "accept", "cguess"]);
-    expect(posted).to.deep.equal(["techdle", "guess", "streak", "leaderboard"]);
+    expect(posted).to.deep.equal(["techdle", "guess", "streak", "leaderboard", "challenge", "accept", "cguess"]);
   });
 
   it("logs in through the ready event", () => {
