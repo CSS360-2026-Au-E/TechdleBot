@@ -365,8 +365,9 @@ describe("Techdle command registration", () => {
     expect(calls.map(c => c.body.name)).to.deep.equal(["techdle", "guess", "streak", "leaderboard", "challenge", "accept", "cguess"]);
     for (const c of calls) expect(c.route).to.equal("/applications/123/guilds/456/commands");
     expect(calls[1].body.options[0]).to.include({ name: "word", required: true, type: 3 });
-    expect(calls[3].body.options[0]).to.include({ name: "player", required: true, type: 6 });
-    expect(calls[5].body.options[0]).to.include({ name: "word", required: true, type: 3 });
+    expect(calls[3].body.options).to.be.undefined;
+    expect(calls[4].body.options[0]).to.include({ name: "player", required: true, type: 6 });
+    expect(calls[6].body.options[0]).to.include({ name: "word", required: true, type: 3 });
   });
   it("rejects missing configuration before making a request", async () => {
     let error;
