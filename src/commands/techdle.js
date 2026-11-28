@@ -32,5 +32,7 @@ export function techdleCommands() {
         .setName("word")
         .setDescription("Your five-letter guess")
         .setRequired(true)),
+      .setName("leaderboard")
+      .setDescription("Show the top Techdle players in this server by best win streak"),
   ].map(command => command.toJSON());
 }

@@ -15,6 +15,9 @@ import {
 const COMMANDS = ["techdle", "guess", "streak", "challenge", "accept", "cguess"];
 // The other player needs to see these, so they aren't ephemeral.
 const PUBLIC_COMMANDS = ["challenge", "accept"];
+import { streakKey, rankLeaderboard, formatLeaderboard } from "../game/leaderboard";
+
+const COMMANDS = ["techdle", "guess", "streak", "leaderboard"];
 
 function gameStorePath() {
   return process.env.TECHDLE_GAME_STORE ||
@@ -127,8 +130,21 @@ export async function handleInteraction(interaction, client) {
     }
 
     const key = interaction.user.id;
+    // Streaks are saved per server so each server gets its own leaderboard.
+    const streakId = streakKey(interaction.guildId, key);
     if (interaction.commandName === "streak") {
-      await interaction.editReply({ content: formatStreak(client.techdleStreaks.get(key)) });
+      await interaction.editReply({ content: formatStreak(client.techdleStreaks.get(streakId)) });
+      return;
+    }
+
+    if (interaction.commandName === "leaderboard") {
+      if (!interaction.guildId) {
+        await interaction.editReply({ content: "Use /leaderboard in a server to see its leaderboard." });
+        return;
+      }
+      const rows = rankLeaderboard(client.techdleStreaks.entries(), interaction.guildId);
+      // Show names without pinging anyone on the list.
+      await interaction.editReply({ content: formatLeaderboard(rows), allowedMentions: { parse: [] } });
       return;
     }
 
@@ -143,8 +159,8 @@ export async function handleInteraction(interaction, client) {
         "Techdle started! Guess the five-letter tech word in 6 attempts. " +
         "Every /techdle starts a new game and replaces your previous game.\n" +
         "Use /guess and enter your word to play.";
-      if (abandoned && client.techdleStreaks.get(key)?.current > 0) {
-        const streak = saveStreak(client, key, s => recordResult(s, STATUS.LOST));
+      if (abandoned && client.techdleStreaks.get(streakId)?.current > 0) {
+        const streak = saveStreak(client, streakId, s => recordResult(s, STATUS.LOST));
         if (streak) content += `\nYour last game wasn't finished, so your win streak reset to 0 (best ${streak.best}).`;
       }
       await interaction.editReply({ content });
@@ -168,7 +184,7 @@ export async function handleInteraction(interaction, client) {
     // A finished game can't take more guesses, so each game is counted once.
     const finished = result.game.status !== STATUS.PLAYING;
     const streak = finished
-      ? saveStreak(client, key, s => recordResult(s, result.game.status))
+      ? saveStreak(client, streakId, s => recordResult(s, result.game.status))
       : null;
 
     const row = formatFeedback(result.feedback);

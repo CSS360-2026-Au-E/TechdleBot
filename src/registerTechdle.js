@@ -14,6 +14,7 @@ export async function register(env = process.env, makeRest = token => new REST({
     });
   }
   console.log("Registered /techdle, /guess, /streak, /challenge, /accept and /cguess in your test server.");
+  console.log("Registered /techdle, /guess, /streak and /leaderboard in your test server.");
 }
 
 if (require.main === module) register().catch(error => {

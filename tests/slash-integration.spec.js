@@ -8,9 +8,9 @@ import { startGame } from "../src/game/start";
 import { ANSWERS } from "../src/game/words";
 import { register } from "../src/registerTechdle";
 
-function interaction(commandName, word, id = "alice") {
+function interaction(commandName, word, id = "alice", guildId = null) {
   return {
-    commandName, user: { id }, deferred: false, replied: false,
+    commandName, user: { id }, guildId, deferred: false, replied: false,
     calls: [], responses: [],
     isChatInputCommand: () => true,
     options: { getString(name, required) {
@@ -27,6 +27,7 @@ function interaction(commandName, word, id = "alice") {
       expect(this.deferred).to.equal(true);
       this.calls.push("edit");
       this.responses.push(value.content);
+      this.lastReply = value;
     },
   };
 }
@@ -45,8 +46,8 @@ describe("Techdle slash integration", () => {
     else process.env.TECHDLE_GAME_STORE = previousPath;
     fs.rmSync(dir, { recursive: true, force: true });
   });
-  async function send(command, word, id) {
-    const i = interaction(command, word, id);
+  async function send(command, word, id, guildId) {
+    const i = interaction(command, word, id, guildId);
     await event.execute(i, client);
     expect(i.calls).to.deep.equal(["defer", "edit"]);
     return i.responses[0];
@@ -240,6 +241,45 @@ describe("Techdle slash integration", () => {
     expect(reply).not.to.include("streak");
     expect(createGameStore(filename).get("alice").status).to.equal("won");
   });
+
+  // Plays one full game for a player in a server and wins it.
+  async function win(id, guildId) {
+    await send("techdle", undefined, id, guildId);
+    await send("guess", client.techdleGames.get(id).answer, id, guildId);
+  }
+  async function lose(id, guildId) {
+    await send("techdle", undefined, id, guildId);
+    const game = client.techdleGames.get(id);
+    for (let n = 0; n < game.maxAttempts; n++) await send("guess", wrong(game, n), id, guildId);
+  }
+
+  it("shows an empty leaderboard before anyone has won", async () => {
+    expect(await send("leaderboard", undefined, "alice", "s1"))
+      .to.equal("🏆 No wins yet. Start a game with /techdle.");
+  });
+  it("ranks a server's players by best streak without pinging them", async () => {
+    await win("alice", "s1");
+    await win("bob", "s1"); await win("bob", "s1"); await lose("bob", "s1");
+    const i = interaction("leaderboard", undefined, "carol", "s1");
+    await event.execute(i, client);
+    expect(i.responses[0]).to.equal(
+      "🏆 Techdle Leaderboard · Best Win Streak\n1. <@bob> 2 wins in a row\n2. <@alice> 1 win in a row");
+    expect(i.lastReply.allowedMentions).to.deep.equal({ parse: [] });
+  });
+  it("keeps each server's streaks and leaderboard separate", async () => {
+    await win("alice", "s1");
+    expect(await send("streak", undefined, "alice", "s2")).to.equal("🔥 Win streak: 0 (best 0)");
+    expect(await send("leaderboard", undefined, "alice", "s2")).to.include("No wins yet");
+    expect(await send("leaderboard", undefined, "alice", "s1")).to.include("<@alice>");
+  });
+  it("doesn't count an unfinished game on the leaderboard", async () => {
+    await send("techdle", undefined, "alice", "s1");
+    await send("guess", wrong(client.techdleGames.get("alice")), "alice", "s1");
+    expect(await send("leaderboard", undefined, "bob", "s1")).to.include("No wins yet");
+  });
+  it("asks for a server when /leaderboard is used in a DM", async () => {
+    expect(await send("leaderboard")).to.equal("Use /leaderboard in a server to see its leaderboard.");
+  });
   it("ignores unrelated commands and interactions", async () => {
     const i = interaction("decline");
     await event.execute(i, client);
@@ -317,6 +357,7 @@ describe("Techdle challenge slash integration", () => {
 
 describe("Techdle command registration", () => {
   it("POSTs all six commands with a required word option and no bulk deletion", async () => {
+  it("POSTs all four commands with a required word option and no bulk deletion", async () => {
     const calls = [];
     await register({ TOKEN: "test", CLIENT_ID: "123", GUILD_ID: "456" }, token => {
       expect(token).to.equal("test");
@@ -325,6 +366,7 @@ describe("Techdle command registration", () => {
     expect(calls.map(c => c.body.name)).to.deep.equal(
       ["techdle", "guess", "streak", "challenge", "accept", "cguess"]
     );
+    expect(calls.map(c => c.body.name)).to.deep.equal(["techdle", "guess", "streak", "leaderboard"]);
     for (const c of calls) expect(c.route).to.equal("/applications/123/guilds/456/commands");
     expect(calls[1].body.options[0]).to.include({ name: "word", required: true, type: 3 });
     expect(calls[3].body.options[0]).to.include({ name: "player", required: true, type: 6 });

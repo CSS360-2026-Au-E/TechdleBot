@@ -88,6 +88,7 @@ describe("Smoke test: every major feature", () => {
         () => ({ async post(route, { body }) { posted.push(body.name); } }));
     } finally { console.log = original; }
     expect(posted).to.deep.equal(["techdle", "guess", "streak", "challenge", "accept", "cguess"]);
+    expect(posted).to.deep.equal(["techdle", "guess", "streak", "leaderboard"]);
   });
 
   it("logs in through the ready event", () => {
