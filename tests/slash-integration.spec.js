@@ -281,23 +281,96 @@ describe("Techdle slash integration", () => {
     expect(await send("leaderboard")).to.equal("Use /leaderboard in a server to see its leaderboard.");
   });
   it("ignores unrelated commands and interactions", async () => {
-    const i = interaction("challenge");
+    const i = interaction("decline");
     await event.execute(i, client);
     expect(i.calls).to.deep.equal([]);
     await event.execute({ isChatInputCommand: () => false }, client);
   });
 });
 
+describe("Techdle challenge slash integration", () => {
+  let dir, previousPath, client;
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "techdle-challenge-"));
+    previousPath = process.env.TECHDLE_GAME_STORE;
+    process.env.TECHDLE_GAME_STORE = path.join(dir, "games.json");
+    client = {};
+  });
+  afterEach(() => {
+    if (previousPath === undefined) delete process.env.TECHDLE_GAME_STORE;
+    else process.env.TECHDLE_GAME_STORE = previousPath;
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  function mock(commandName, { id = "alice", word, targetUser } = {}) {
+    return {
+      commandName, user: { id },
+      responses: [], followUps: [],
+      isChatInputCommand: () => true,
+      options: { getString: () => word, getUser: () => targetUser },
+      async deferReply() {},
+      async editReply(value) { this.responses.push(value.content); },
+      async followUp(value) { this.followUps.push(value); },
+    };
+  }
+  async function send(commandName, options) {
+    const i = mock(commandName, options);
+    await event.execute(i, client);
+    return { reply: i.responses[0], followUps: i.followUps };
+  }
+  async function start() {
+    await send("challenge", { id: "alice", targetUser: { id: "bob" } });
+    await send("accept", { id: "bob" });
+    return client.techdleChallenges.get("alice").answer;
+  }
+
+  it("invites the opponent and gives private feedback while the challenge is still going", async () => {
+    const answer = await start();
+    const wrong = ANSWERS.find(word => word !== answer);
+    const { reply, followUps } = await send("cguess", { id: "alice", word: wrong });
+    expect(reply).to.include("(Guess 1/6)");
+    expect(followUps).to.have.length(0); // nobody has won yet
+  });
+  it("refuses to challenge yourself and to accept twice", async () => {
+    expect((await send("challenge", { id: "alice", targetUser: { id: "alice" } })).reply)
+      .to.equal("You can't challenge yourself.");
+    await start();
+    expect((await send("accept", { id: "bob" })).reply).to.equal("This challenge has already been accepted.");
+  });
+  it("ends the challenge the moment someone wins, locking out the other player", async () => {
+    const answer = await start();
+    const { followUps } = await send("cguess", { id: "alice", word: answer });
+    expect(followUps[0].content).to.include("<@alice> wins!");
+    const blocked = await send("cguess", { id: "bob", word: answer });
+    expect(blocked.reply).to.equal("This challenge is already finished.");
+    expect(blocked.followUps).to.have.length(0);
+  });
+  it("ties when neither player solves it", async () => {
+    const answer = await start();
+    const wrong = ANSWERS.filter(word => word !== answer).slice(0, 6);
+    for (const word of wrong) await send("cguess", { id: "alice", word });
+    let last;
+    for (const word of wrong) last = await send("cguess", { id: "bob", word });
+    expect(last.followUps[0].content).to.include("Tie");
+  });
+});
+
 describe("Techdle command registration", () => {
+  it("POSTs all six commands with a required word option and no bulk deletion", async () => {
   it("POSTs all four commands with a required word option and no bulk deletion", async () => {
     const calls = [];
     await register({ TOKEN: "test", CLIENT_ID: "123", GUILD_ID: "456" }, token => {
       expect(token).to.equal("test");
       return { async post(route, options) { calls.push({ route, ...options }); } };
     });
+    expect(calls.map(c => c.body.name)).to.deep.equal(
+      ["techdle", "guess", "streak", "challenge", "accept", "cguess"]
+    );
     expect(calls.map(c => c.body.name)).to.deep.equal(["techdle", "guess", "streak", "leaderboard"]);
     for (const c of calls) expect(c.route).to.equal("/applications/123/guilds/456/commands");
     expect(calls[1].body.options[0]).to.include({ name: "word", required: true, type: 3 });
+    expect(calls[3].body.options[0]).to.include({ name: "player", required: true, type: 6 });
+    expect(calls[5].body.options[0]).to.include({ name: "word", required: true, type: 3 });
   });
   it("rejects missing configuration before making a request", async () => {
     let error;

@@ -1,7 +1,6 @@
 import { REST, Routes } from "discord.js";
 import { techdleCommands } from "./commands/techdle";
 
-// Run explicitly for your private test server. POST creates/updates only this
 // named commands and preserves other commands registered by teammates.
 export async function register(env = process.env, makeRest = token => new REST({ version: "10" }).setToken(token)) {
   const { TOKEN, CLIENT_ID, GUILD_ID } = env;
@@ -14,6 +13,7 @@ export async function register(env = process.env, makeRest = token => new REST({
       body: command,
     });
   }
+  console.log("Registered /techdle, /guess, /streak, /challenge, /accept and /cguess in your test server.");
   console.log("Registered /techdle, /guess, /streak and /leaderboard in your test server.");
 }
 
