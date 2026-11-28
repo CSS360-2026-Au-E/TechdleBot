@@ -8,9 +8,9 @@ import { startGame } from "../src/game/start";
 import { ANSWERS } from "../src/game/words";
 import { register } from "../src/registerTechdle";
 
-function interaction(commandName, word, id = "alice") {
+function interaction(commandName, word, id = "alice", guildId = null) {
   return {
-    commandName, user: { id }, deferred: false, replied: false,
+    commandName, user: { id }, guildId, deferred: false, replied: false,
     calls: [], responses: [],
     isChatInputCommand: () => true,
     options: { getString(name, required) {
@@ -27,6 +27,7 @@ function interaction(commandName, word, id = "alice") {
       expect(this.deferred).to.equal(true);
       this.calls.push("edit");
       this.responses.push(value.content);
+      this.lastReply = value;
     },
   };
 }
@@ -45,8 +46,8 @@ describe("Techdle slash integration", () => {
     else process.env.TECHDLE_GAME_STORE = previousPath;
     fs.rmSync(dir, { recursive: true, force: true });
   });
-  async function send(command, word, id) {
-    const i = interaction(command, word, id);
+  async function send(command, word, id, guildId) {
+    const i = interaction(command, word, id, guildId);
     await event.execute(i, client);
     expect(i.calls).to.deep.equal(["defer", "edit"]);
     return i.responses[0];
@@ -55,7 +56,7 @@ describe("Techdle slash integration", () => {
     expect(await send("techdle", undefined, id)).to.include("Use /guess");
     return client.techdleGames.get(id);
   }
-  const wrong = game => ANSWERS.find(word => word !== game.answer);
+  const wrong = (game, index = 0) => ANSWERS.filter(word => word !== game.answer)[index];
 
   it("asks a player without a game to start first", async () => {
     expect(await send("guess", "array")).to.equal("Start a game with /techdle first.");
@@ -96,16 +97,16 @@ describe("Techdle slash integration", () => {
   it("loses after six valid wrong guesses and rejects a seventh", async () => {
     const game = await start();
     for (let n = 1; n < 6; n++) {
-      expect(await send("guess", wrong(game))).to.include(`${6 - n} attempts left`);
+      expect(await send("guess", wrong(game, n - 1))).to.include(`${6 - n} attempts left`);
     }
-    expect(await send("guess", wrong(game))).to.include(`No attempts left. The word was ${game.answer.toUpperCase()}.`);
+    expect(await send("guess", wrong(game, 5))).to.include(`No attempts left. The word was ${game.answer.toUpperCase()}.`);
     const before = fs.readFileSync(filename, "utf8");
     expect(await send("guess", game.answer)).to.equal("This game is already finished.");
     expect(fs.readFileSync(filename, "utf8")).to.equal(before);
   });
   it("allows a win on the sixth guess", async () => {
     const game = await start();
-    for (let n = 0; n < 5; n++) await send("guess", wrong(game));
+    for (let n = 0; n < 5; n++) await send("guess", wrong(game, n));
     expect(await send("guess", game.answer)).to.include("in 6 tries");
     expect(client.techdleGames.get("alice").status).to.equal("won");
   });
@@ -127,7 +128,7 @@ describe("Techdle slash integration", () => {
     let game = await start();
     await send("guess", game.answer);
     game = await start();
-    for (let n = 0; n < 6; n++) await send("guess", wrong(game));
+    for (let n = 0; n < 6; n++) await send("guess", wrong(game, n));
     const next = await start();
     expect(next.status).to.equal("playing");
     expect(next.answer).not.to.equal(game.answer);
@@ -147,10 +148,11 @@ describe("Techdle slash integration", () => {
     expect(await send("guess", game.answer)).to.include("in 2 tries");
     expect(createGameStore(filename).get("alice").status).to.equal("won");
   });
-  it("preserves two overlapping guesses in one process", async () => {
+  it("rejects overlapping duplicate guesses in one process", async () => {
     const game = await start();
-    await Promise.all([send("guess", wrong(game)), send("guess", wrong(game))]);
-    expect(createGameStore(filename).get("alice").guesses).to.have.length(2);
+    const replies = await Promise.all([send("guess", wrong(game)), send("guess", wrong(game))]);
+    expect(replies).to.include("You already guessed that!");
+    expect(createGameStore(filename).get("alice").guesses).to.have.length(1);
   });
   it("does not claim a successful guess if saving fails", async () => {
     const game = await start();
@@ -190,7 +192,7 @@ describe("Techdle slash integration", () => {
     await send("guess", (await start()).answer);
     const game = await start();
     let reply;
-    for (let n = 0; n < 6; n++) reply = await send("guess", wrong(game));
+    for (let n = 0; n < 6; n++) reply = await send("guess", wrong(game, n));
     expect(reply).to.include("The word was");
     expect(reply).to.include("🔥 Win streak: 0 (best 2)");
   });
@@ -239,24 +241,133 @@ describe("Techdle slash integration", () => {
     expect(reply).not.to.include("streak");
     expect(createGameStore(filename).get("alice").status).to.equal("won");
   });
+
+  // Plays one full game for a player in a server and wins it.
+  async function win(id, guildId) {
+    await send("techdle", undefined, id, guildId);
+    await send("guess", client.techdleGames.get(id).answer, id, guildId);
+  }
+  async function lose(id, guildId) {
+    await send("techdle", undefined, id, guildId);
+    const game = client.techdleGames.get(id);
+    for (let n = 0; n < game.maxAttempts; n++) await send("guess", wrong(game, n), id, guildId);
+  }
+
+  it("shows an empty leaderboard before anyone has won", async () => {
+    expect(await send("leaderboard", undefined, "alice", "s1"))
+      .to.equal("🏆 No wins yet. Start a game with /techdle.");
+  });
+  it("ranks a server's players by best streak without pinging them", async () => {
+    await win("alice", "s1");
+    await win("bob", "s1"); await win("bob", "s1"); await lose("bob", "s1");
+    const i = interaction("leaderboard", undefined, "carol", "s1");
+    await event.execute(i, client);
+    expect(i.responses[0]).to.equal(
+      "🏆 Techdle Leaderboard · Best Win Streak\n1. <@bob> 2 wins in a row\n2. <@alice> 1 win in a row");
+    expect(i.lastReply.allowedMentions).to.deep.equal({ parse: [] });
+  });
+  it("keeps each server's streaks and leaderboard separate", async () => {
+    await win("alice", "s1");
+    expect(await send("streak", undefined, "alice", "s2")).to.equal("🔥 Win streak: 0 (best 0)");
+    expect(await send("leaderboard", undefined, "alice", "s2")).to.include("No wins yet");
+    expect(await send("leaderboard", undefined, "alice", "s1")).to.include("<@alice>");
+  });
+  it("doesn't count an unfinished game on the leaderboard", async () => {
+    await send("techdle", undefined, "alice", "s1");
+    await send("guess", wrong(client.techdleGames.get("alice")), "alice", "s1");
+    expect(await send("leaderboard", undefined, "bob", "s1")).to.include("No wins yet");
+  });
+  it("asks for a server when /leaderboard is used in a DM", async () => {
+    expect(await send("leaderboard")).to.equal("Use /leaderboard in a server to see its leaderboard.");
+  });
   it("ignores unrelated commands and interactions", async () => {
-    const i = interaction("challenge");
+    const i = interaction("decline");
     await event.execute(i, client);
     expect(i.calls).to.deep.equal([]);
     await event.execute({ isChatInputCommand: () => false }, client);
   });
 });
 
+describe("Techdle challenge slash integration", () => {
+  let dir, previousPath, client;
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "techdle-challenge-"));
+    previousPath = process.env.TECHDLE_GAME_STORE;
+    process.env.TECHDLE_GAME_STORE = path.join(dir, "games.json");
+    client = {};
+  });
+  afterEach(() => {
+    if (previousPath === undefined) delete process.env.TECHDLE_GAME_STORE;
+    else process.env.TECHDLE_GAME_STORE = previousPath;
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  function mock(commandName, { id = "alice", word, targetUser } = {}) {
+    return {
+      commandName, user: { id },
+      responses: [], followUps: [],
+      isChatInputCommand: () => true,
+      options: { getString: () => word, getUser: () => targetUser },
+      async deferReply() {},
+      async editReply(value) { this.responses.push(value.content); },
+      async followUp(value) { this.followUps.push(value); },
+    };
+  }
+  async function send(commandName, options) {
+    const i = mock(commandName, options);
+    await event.execute(i, client);
+    return { reply: i.responses[0], followUps: i.followUps };
+  }
+  async function start() {
+    await send("challenge", { id: "alice", targetUser: { id: "bob" } });
+    await send("accept", { id: "bob" });
+    return client.techdleChallenges.get("alice").answer;
+  }
+
+  it("invites the opponent and gives private feedback while the challenge is still going", async () => {
+    const answer = await start();
+    const wrong = ANSWERS.find(word => word !== answer);
+    const { reply, followUps } = await send("cguess", { id: "alice", word: wrong });
+    expect(reply).to.include("(Guess 1/6)");
+    expect(followUps).to.have.length(0); // nobody has won yet
+  });
+  it("refuses to challenge yourself and to accept twice", async () => {
+    expect((await send("challenge", { id: "alice", targetUser: { id: "alice" } })).reply)
+      .to.equal("You can't challenge yourself.");
+    await start();
+    expect((await send("accept", { id: "bob" })).reply).to.equal("This challenge has already been accepted.");
+  });
+  it("ends the challenge the moment someone wins, locking out the other player", async () => {
+    const answer = await start();
+    const { followUps } = await send("cguess", { id: "alice", word: answer });
+    expect(followUps[0].content).to.include("<@alice> wins!");
+    const blocked = await send("cguess", { id: "bob", word: answer });
+    expect(blocked.reply).to.equal("This challenge is already finished.");
+    expect(blocked.followUps).to.have.length(0);
+  });
+  it("ties when neither player solves it", async () => {
+    const answer = await start();
+    const wrong = ANSWERS.filter(word => word !== answer).slice(0, 6);
+    for (const word of wrong) await send("cguess", { id: "alice", word });
+    let last;
+    for (const word of wrong) last = await send("cguess", { id: "bob", word });
+    expect(last.followUps[0].content).to.include("Tie");
+  });
+});
+
 describe("Techdle command registration", () => {
-  it("POSTs all three commands with a required word option and no bulk deletion", async () => {
+  it("POSTs all seven commands with a required word option and no bulk deletion", async () => {
     const calls = [];
     await register({ TOKEN: "test", CLIENT_ID: "123", GUILD_ID: "456" }, token => {
       expect(token).to.equal("test");
       return { async post(route, options) { calls.push({ route, ...options }); } };
     });
-    expect(calls.map(c => c.body.name)).to.deep.equal(["techdle", "guess", "streak"]);
+    expect(calls.map(c => c.body.name)).to.deep.equal(["techdle", "guess", "streak", "leaderboard", "challenge", "accept", "cguess"]);
     for (const c of calls) expect(c.route).to.equal("/applications/123/guilds/456/commands");
     expect(calls[1].body.options[0]).to.include({ name: "word", required: true, type: 3 });
+    expect(calls[3].body.options).to.deep.equal([]);
+    expect(calls[4].body.options[0]).to.include({ name: "player", required: true, type: 6 });
+    expect(calls[6].body.options[0]).to.include({ name: "word", required: true, type: 3 });
   });
   it("rejects missing configuration before making a request", async () => {
     let error;

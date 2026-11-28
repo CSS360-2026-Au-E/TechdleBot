@@ -16,6 +16,8 @@ export function createGameStore(filename) {
 
   return {
     get(key) { return entries[key]; },
+    // Every saved [key, value] pair, e.g. for ranking players.
+    entries() { return Object.entries(entries); },
     set(key, game) {
       const next = { ...entries, [key]: game };
       fs.mkdirSync(path.dirname(filename), { recursive: true });

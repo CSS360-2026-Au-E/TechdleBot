@@ -4,19 +4,30 @@ import { createGameStore } from "../game/store";
 import { submitGuess, attemptsLeft, STATUS } from "../game/game";
 import { formatFeedback } from "../game/feedback";
 import { recordResult, isAbandoned, formatStreak } from "../game/streak";
+import { createChallenge, acceptChallenge, submitChallengeGuess, challengeResult, RESULT} from "../game/challenge";
+import { streakKey, rankLeaderboard, formatLeaderboard } from "../game/leaderboard";
 
-const COMMANDS = ["techdle", "guess", "streak"];
+const COMMANDS = ["techdle", "guess", "streak", "leaderboard", "challenge", "accept", "cguess"];
+// The other player needs to see these, so they aren't ephemeral.
+const PUBLIC_COMMANDS = ["challenge", "accept"];
 
 function gameStorePath() {
   return process.env.TECHDLE_GAME_STORE ||
     path.join(process.cwd(), "data", "techdle-games.json");
 }
 
-// Streaks live in their own file next to the saved games.
+// Streaks and challenges live in their own files next to the saved games.
 function streakStorePath() {
   return process.env.TECHDLE_STREAK_STORE ||
     path.join(path.dirname(gameStorePath()), "techdle-streaks.json");
 }
+
+function challengeStorePath() {
+  return process.env.TECHDLE_CHALLENGE_STORE ||
+    path.join(path.dirname(gameStorePath()), "techdle-challenges.json");
+}
+
+const mention = id => `<@${id}>`;
 
 // Saves a streak change. A failed streak save is logged but never hides the
 // game result, which has already been saved.
@@ -29,6 +40,58 @@ function saveStreak(client, key, update) {
     console.error("Techdle streak save failed:", error.message);
     return null;
   }
+}
+
+// /challenge always replaces any previous challenge for both players, same
+// as /techdle does for a solo game.
+async function handleChallenge(interaction, client, key) {
+  const opponent = interaction.options.getUser("player", true);
+  const created = createChallenge(key, opponent.id);
+  if (!created.ok) return interaction.editReply({ content: created.error });
+
+  client.techdleChallenges.set(key, created.challenge);
+  client.techdleChallenges.set(opponent.id, created.challenge);
+  return interaction.editReply({
+    content: `${mention(opponent.id)}, ${mention(key)} has challenged you to a head-to-head Techdle! Use /accept to play.`,
+  });
+}
+
+async function handleAccept(interaction, client, key) {
+  const result = acceptChallenge(client.techdleChallenges.get(key), key);
+  if (!result.ok) return interaction.editReply({ content: result.error });
+
+  client.techdleChallenges.set(result.challenge.challenger, result.challenge);
+  client.techdleChallenges.set(result.challenge.opponent, result.challenge);
+  return interaction.editReply({ content: "Challenge accepted! Use /cguess to play your six guesses." });
+}
+
+function announceResult(challenge) {
+  const { challenger, opponent, answer } = challenge;
+  const outcome = challengeResult(challenge);
+  const line = outcome === RESULT.TIE
+    ? `🤝 Tie between ${mention(challenger)} and ${mention(opponent)}!`
+    : `🏆 ${mention(outcome === RESULT.CHALLENGER ? challenger : opponent)} wins!`;
+  return `${line} The word was ${answer.toUpperCase()}.`;
+}
+
+async function handleChallengeGuess(interaction, client, key) {
+  const challenge = client.techdleChallenges.get(key);
+  const result = submitChallengeGuess(challenge, key, interaction.options.getString("word", true));
+  if (!result.ok) return interaction.editReply({ content: result.error });
+
+  client.techdleChallenges.set(result.challenge.challenger, result.challenge);
+  client.techdleChallenges.set(result.challenge.opponent, result.challenge);
+
+  const game = result.challenge.games[key];
+  const row = formatFeedback(result.feedback);
+  const content = game.status === STATUS.PLAYING
+    ? `${row} (Guess ${game.guesses.length}/${game.maxAttempts})`
+    : `${row}\n${game.status === STATUS.WON ? "🎉 You solved it!" : "No attempts left."}`;
+  await interaction.editReply({ content });
+
+  // Private feedback above still goes to whoever just guessed; the result
+  // is only announced once both players are done.
+  if (result.finished) await interaction.followUp({ content: announceResult(result.challenge) });
 }
 
 export async function handleStart(interaction, client) {
@@ -45,21 +108,41 @@ export async function handleInteraction(interaction, client) {
   }
 
   try {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ ephemeral: !PUBLIC_COMMANDS.includes(interaction.commandName) });
 
-    // Load saved games and streaks only when first needed.
+    // Load saved games, streaks and challenges only when first needed.
     if (!client.techdleGames) {
       client.techdleGames = createGameStore(gameStorePath());
     }
     if (!client.techdleStreaks) {
       client.techdleStreaks = createGameStore(streakStorePath());
     }
+    if (!client.techdleChallenges) {
+      client.techdleChallenges = createGameStore(challengeStorePath());
+    }
 
     const key = interaction.user.id;
+    // Streaks are saved per server so each server gets its own leaderboard.
+    const streakId = streakKey(interaction.guildId, key);
     if (interaction.commandName === "streak") {
-      await interaction.editReply({ content: formatStreak(client.techdleStreaks.get(key)) });
+      await interaction.editReply({ content: formatStreak(client.techdleStreaks.get(streakId)) });
       return;
     }
+
+    if (interaction.commandName === "leaderboard") {
+      if (!interaction.guildId) {
+        await interaction.editReply({ content: "Use /leaderboard in a server to see its leaderboard." });
+        return;
+      }
+      const rows = rankLeaderboard(client.techdleStreaks.entries(), interaction.guildId);
+      // Show names without pinging anyone on the list.
+      await interaction.editReply({ content: formatLeaderboard(rows), allowedMentions: { parse: [] } });
+      return;
+    }
+
+    if (interaction.commandName === "challenge") return await handleChallenge(interaction, client, key);
+    if (interaction.commandName === "accept") return await handleAccept(interaction, client, key);
+    if (interaction.commandName === "cguess") return await handleChallengeGuess(interaction, client, key);
 
     if (interaction.commandName === "techdle") {
       const abandoned = isAbandoned(client.techdleGames.get(key));
@@ -68,8 +151,8 @@ export async function handleInteraction(interaction, client) {
         "Techdle started! Guess the five-letter tech word in 6 attempts. " +
         "Every /techdle starts a new game and replaces your previous game.\n" +
         "Use /guess and enter your word to play.";
-      if (abandoned && client.techdleStreaks.get(key)?.current > 0) {
-        const streak = saveStreak(client, key, s => recordResult(s, STATUS.LOST));
+      if (abandoned && client.techdleStreaks.get(streakId)?.current > 0) {
+        const streak = saveStreak(client, streakId, s => recordResult(s, STATUS.LOST));
         if (streak) content += `\nYour last game wasn't finished, so your win streak reset to 0 (best ${streak.best}).`;
       }
       await interaction.editReply({ content });
@@ -93,7 +176,7 @@ export async function handleInteraction(interaction, client) {
     // A finished game can't take more guesses, so each game is counted once.
     const finished = result.game.status !== STATUS.PLAYING;
     const streak = finished
-      ? saveStreak(client, key, s => recordResult(s, result.game.status))
+      ? saveStreak(client, streakId, s => recordResult(s, result.game.status))
       : null;
 
     const row = formatFeedback(result.feedback);

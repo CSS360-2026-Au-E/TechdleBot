@@ -47,7 +47,7 @@ describe("Smoke test: every major feature", () => {
     return interaction.replies[0];
   }
   const answer = () => client.techdleGames.get("smoke-user").answer;
-  const wrongWord = () => ANSWERS.find(word => word !== answer());
+  const wrongWord = (index = 0) => ANSWERS.filter(word => word !== answer())[index];
 
   before(() => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), "techdle-smoke-"));
@@ -87,7 +87,7 @@ describe("Smoke test: every major feature", () => {
       await register({ TOKEN: "t", CLIENT_ID: "1", GUILD_ID: "2" },
         () => ({ async post(route, { body }) { posted.push(body.name); } }));
     } finally { console.log = original; }
-    expect(posted).to.deep.equal(["techdle", "guess", "streak"]);
+    expect(posted).to.deep.equal(["techdle", "guess", "streak", "leaderboard", "challenge", "accept", "cguess"]);
   });
 
   it("logs in through the ready event", () => {
@@ -111,7 +111,7 @@ describe("Smoke test: every major feature", () => {
   it("plays a full game: start, bad guess, wrong guess, win", async () => {
     expect(await command("techdle")).to.include("Techdle started!");
     expect(await command("guess", "ab")).to.equal("you need 5 letters");
-    expect(await command("guess", wrongWord())).to.include("(Guess 1/6)");
+    expect(await command("guess", wrongWord(0))).to.include("(Guess 1/6)");
     const win = await command("guess", answer());
     expect(win).to.include("🎉 You win!");
     expect(win).to.include("🔥 Win streak: 1 (best 1)");
@@ -120,7 +120,7 @@ describe("Smoke test: every major feature", () => {
   it("loses after six wrong guesses and resets the streak", async () => {
     await command("techdle");
     let reply;
-    for (let i = 0; i < 6; i++) reply = await command("guess", wrongWord());
+    for (let i = 0; i < 6; i++) reply = await command("guess", wrongWord(i));
     expect(reply).to.include(`The word was ${answer().toUpperCase()}`);
     expect(reply).to.include("🔥 Win streak: 0 (best 1)");
   });

@@ -12,6 +12,7 @@ export const STATUS = {
 
 export const GAME_ERRORS = {
   GAME_OVER: "This game is already finished.",
+  DUPLICATE_GUESS: "You already guessed that!",
 };
 
 // A fresh game for one answer. Games are plain data and never mutated:
@@ -42,6 +43,9 @@ export function submitGuess(game, raw) {
 
   const checked = validateGuess(raw);
   if (!checked.valid) return { ok: false, error: checked.error };
+  if (game.guesses.some(({ guess }) => guess === checked.guess)) {
+    return { ok: false, error: GAME_ERRORS.DUPLICATE_GUESS };
+  }
 
   const feedback = scoreGuess(checked.guess, game.answer);
   const next = {
